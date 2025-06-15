@@ -1,0 +1,27 @@
+# Core dependencies
+yt-dlp
+pydub
+requests
+python-dotenv
+
+# Audio processing
+numpy
+scipy
+librosa
+
+# Django
+django==5.1.4
+iommi==7.6.0
+
+# CLI
+rich==13.9.4
+
+# Export functionality
+pandas==2.2.3
+spotipy==2.24.0
+
+# Development
+pytest==8.3.4
+black==24.10.0
+flake8==7.1.1
+mypy==1.13.0
