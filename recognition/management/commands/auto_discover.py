@@ -29,6 +29,13 @@ class Command(BaseCommand):
         )
         
         parser.add_argument(
+            '--years',
+            type=int,
+            default=5,
+            help='Number of years back to search for videos (default: 5)'
+        )
+        
+        parser.add_argument(
             '--max-videos',
             type=int,
             default=50,
@@ -38,7 +45,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--service',
             type=str,
-            default='acrcloud',
+            default='shazamkit',
             choices=['acrcloud', 'shazamkit'],
             help='Recognition service to use'
         )
@@ -70,7 +77,7 @@ class Command(BaseCommand):
     
     def handle(self, *args, **options):
         console.print("[bold blue]J&J WCS Auto Discovery System[/bold blue]")
-        console.print(f"Searching for videos from the last {options['days_back']} days\n")
+        console.print(f"Searching for videos from the last {options['days_back']} days and {options['years']} years\n")
         
         if options['continuous']:
             self.run_continuous(options)
@@ -84,7 +91,8 @@ class Command(BaseCommand):
             discovered_urls = self.discover_videos(options)
             
             if not discovered_urls:
-                console.print("[yellow]No new videos found to process[/yellow]")
+                console.print("[bold yellow]No NEW videos found to process[/bold yellow]")
+                console.print("[dim]All recent videos have already been discovered[/dim]")
                 return
                 
             if options['dry_run']:
@@ -99,7 +107,10 @@ class Command(BaseCommand):
             self.process_videos(discovered_urls, options)
             
         except Exception as e:
+            import traceback
             logger.error(f"Error in auto discovery: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             raise CommandError(f"Auto discovery failed: {e}")
     
     def run_continuous(self, options):
@@ -118,7 +129,10 @@ class Command(BaseCommand):
                 console.print("\n[red]Stopped by user[/red]")
                 break
             except Exception as e:
+                import traceback
                 logger.error(f"Error in continuous mode: {e}")
+                logger.error("Full stack trace:")
+                traceback.print_exc()
                 console.print(f"[red]Error: {e}[/red]")
                 console.print(f"[dim]Retrying in {options['interval']} seconds...[/dim]")
                 time.sleep(options['interval'])
@@ -131,29 +145,47 @@ class Command(BaseCommand):
         console.print("[cyan]Searching for new J&J WCS videos...[/cyan]")
         
         # Search with queries
-        urls = searcher.discover_new_videos(days_back=options['days_back'])
+        urls = searcher.discover_new_videos(days_back=options['days_back'], year_range=options['years'])
+        query_new_count = len(urls)
         discovered_urls.extend(urls)
+        console.print(f"[green]Found {query_new_count} NEW videos from search queries[/green]")
         
         # Search channels if requested
+        channel_new_count = 0
         if options['channels']:
-            console.print("[cyan]Searching popular WCS channels...[/cyan]")
+            console.print("\n[cyan]Searching popular WCS channels...[/cyan]")
             channels = searcher.get_popular_wcs_channels()
             
             for channel in channels:
                 try:
                     channel_urls = searcher.search_by_channel(channel, max_results=20)
+                    if channel_urls:
+                        channel_new_count += len(channel_urls)
+                        console.print(f"  • {channel.split('/')[-1]}: {len(channel_urls)} NEW videos")
                     discovered_urls.extend(channel_urls)
                 except Exception as e:
+                    import traceback
                     logger.warning(f"Error searching channel {channel}: {e}")
+                    logger.warning("Full stack trace:")
+                    traceback.print_exc()
+            
+            if channel_new_count > 0:
+                console.print(f"[green]Found {channel_new_count} NEW videos from channels[/green]")
         
         # Remove duplicates
+        original_count = len(discovered_urls)
         discovered_urls = list(set(discovered_urls))
+        duplicate_count = original_count - len(discovered_urls)
+        
+        if duplicate_count > 0:
+            console.print(f"[yellow]Removed {duplicate_count} duplicate URLs[/yellow]")
         
         # Limit to max videos
         if len(discovered_urls) > options['max_videos']:
+            console.print(f"[yellow]Limiting to {options['max_videos']} videos (from {len(discovered_urls)} found)[/yellow]")
             discovered_urls = discovered_urls[:options['max_videos']]
         
-        console.print(f"[green]Found {len(discovered_urls)} new videos to process[/green]")
+        console.print(f"\n[bold green]Total: {len(discovered_urls)} NEW videos to process[/bold green]")
         return discovered_urls
     
     def process_videos(self, urls: list, options):
@@ -205,9 +237,13 @@ class Command(BaseCommand):
             self.show_summary(videos)
             
         except Exception as e:
+            import traceback
             session.status = 'failed'
             session.error_message = str(e)
             session.save()
+            logger.error(f"Error processing videos: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             raise
     
     def show_summary(self, videos):

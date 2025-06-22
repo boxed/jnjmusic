@@ -1,11 +1,13 @@
-import base64
-import hashlib
-import hmac
+import asyncio
 import json
 import time
+import base64
+import hmac
+import hashlib
 from typing import Dict, List, Optional, Tuple
-import requests
 from pathlib import Path
+from shazamio import Shazam
+import requests
 
 from .config import config
 from .utils import setup_logger
@@ -62,7 +64,7 @@ class ACRCloudRecognizer(MusicRecognizer):
             }
             
             url = f"https://{self.host}/v1/identify"
-            response = requests.post(url, files=files, data=data, timeout=30)
+            response = requests.post(url, files=files, data=data, timeout=10)
             
             if response.status_code == 200:
                 result = response.json()
@@ -74,7 +76,10 @@ class ACRCloudRecognizer(MusicRecognizer):
                 logger.error(f"ACRCloud API error: {response.status_code}")
             
         except Exception as e:
+            import traceback
             logger.error(f"Error identifying audio: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
         
         return None
     
@@ -113,15 +118,114 @@ class ACRCloudRecognizer(MusicRecognizer):
 
 
 class ShazamKitRecognizer(MusicRecognizer):
-    """Alternative implementation using ShazamKit (requires additional setup)."""
+    """Shazam music recognition implementation using shazamio."""
+    
+    def __init__(self):
+        self.shazam = Shazam()
     
     def identify(self, audio_path: Path) -> Optional[Dict]:
-        # Placeholder for ShazamKit implementation
-        logger.warning("ShazamKit recognizer not implemented yet")
-        return None
+        """Identify a song using Shazam API."""
+        try:
+            # Run async function in sync context with timeout
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(
+                    asyncio.wait_for(self._identify_async(audio_path), timeout=15.0)
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Shazam recognition timeout for {audio_path}")
+                result = None
+            finally:
+                loop.close()
+            return result
+        except Exception as e:
+            import traceback
+            logger.error(f"Error identifying audio with Shazam: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
+            return None
+    
+    async def _identify_async(self, audio_path: Path) -> Optional[Dict]:
+        """Async method to identify song."""
+        try:
+            # Recognize song
+            out = await self.shazam.recognize(str(audio_path))
+            
+            logger.debug(f"Shazam response: {json.dumps(out, indent=2) if out else 'None'}")
+            
+            if not out:
+                logger.warning("Empty Shazam response")
+                return None
+            
+            # Check if there are matches
+            if 'matches' in out and not out['matches']:
+                logger.info("No matches found by Shazam for this audio segment")
+                return None
+            
+            if 'track' not in out:
+                logger.warning(f"No track found in Shazam response. Response keys: {list(out.keys())}")
+                return None
+            
+            return self._parse_result(out)
+        except Exception as e:
+            import traceback
+            logger.error(f"Shazam recognition error: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
+            return None
+    
+    def _parse_result(self, result: Dict) -> Dict:
+        """Parse Shazam result into standardized format."""
+        track = result.get('track', {})
+        
+        if not track:
+            return None
+        
+        # Extract artists
+        artists = []
+        if 'subtitle' in track:
+            artists = [track['subtitle']]
+        
+        # Extract Spotify ID if available
+        spotify_id = None
+        if 'hub' in track:
+            for provider in track['hub'].get('providers', []):
+                if provider.get('type') == 'SPOTIFY':
+                    for action in provider.get('actions', []):
+                        if 'uri' in action:
+                            # Extract ID from spotify:track:ID format
+                            spotify_id = action['uri'].split(':')[-1]
+                            break
+        
+        # Extract genres
+        genres = []
+        if 'genres' in track:
+            genres = list(track['genres'].values()) if isinstance(track['genres'], dict) else track['genres']
+        
+        # Extract album safely
+        album = ''
+        sections = track.get('sections', [])
+        if sections and len(sections) > 0:
+            metadata_list = sections[0].get('metadata', [])
+            if metadata_list and len(metadata_list) > 0:
+                album = metadata_list[0].get('text', '')
+        
+        return {
+            'title': track.get('title', 'Unknown'),
+            'artists': artists,
+            'album': album,
+            'duration_ms': 0,  # Shazam doesn't provide duration in the recognition response
+            'score': 100 if track else 0,  # Shazam doesn't provide confidence scores
+            'spotify_id': spotify_id,
+            'external_ids': {},
+            'genres': genres,
+            'release_date': '',
+            'raw_result': result
+        }
 
 
-def get_recognizer(service: str = "acrcloud") -> MusicRecognizer:
+def get_recognizer(service: str = "shazamkit") -> MusicRecognizer:
     """Factory function to get appropriate music recognizer."""
     recognizers = {
         "acrcloud": ACRCloudRecognizer,

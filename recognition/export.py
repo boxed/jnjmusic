@@ -29,7 +29,10 @@ def export_results(
             return False
             
     except Exception as e:
+        import traceback
         logger.error(f"Error exporting results: {e}")
+        logger.error("Full stack trace:")
+        traceback.print_exc()
         return False
 
 
@@ -62,14 +65,14 @@ def export_to_csv(results: Union[List[RecognitionResult], QuerySet], output_path
                     'video_url': result.video.url,
                     'timestamp_start': result.timestamp_start,
                     'timestamp_end': result.timestamp_end,
-                    'title': result.title,
-                    'artists': ', '.join(result.artists) if result.artists else '',
-                    'album': result.album,
+                    'title': result.song.title,
+                    'artists': ', '.join([artist.name for artist in result.song.artist_set.all()]) if result.song.artist_set.exists() else '',
+                    'album': result.song.album,
                     'confidence_score': result.confidence_score,
-                    'spotify_id': result.spotify_id,
-                    'isrc': result.isrc,
-                    'genres': ', '.join(result.genres) if result.genres else '',
-                    'release_date': result.release_date,
+                    'spotify_id': result.song.spotify_id,
+                    'isrc': result.song.isrc,
+                    'genres': ', '.join(result.song.genres) if result.song.genres else '',
+                    'release_date': result.song.release_date,
                     'recognized_at': result.recognized_at.isoformat()
                 })
         
@@ -77,7 +80,10 @@ def export_to_csv(results: Union[List[RecognitionResult], QuerySet], output_path
         return True
         
     except Exception as e:
+        import traceback
         logger.error(f"Error exporting to CSV: {e}")
+        logger.error("Full stack trace:")
+        traceback.print_exc()
         return False
 
 
@@ -98,16 +104,16 @@ def export_to_json(results: Union[List[RecognitionResult], QuerySet], output_pat
                 'recognition': {
                     'timestamp_start': result.timestamp_start,
                     'timestamp_end': result.timestamp_end,
-                    'title': result.title,
-                    'artists': result.artists,
-                    'album': result.album,
-                    'duration_ms': result.duration_ms,
+                    'title': result.song.title,
+                    'artists': [artist.name for artist in result.song.artist_set.all()],
+                    'album': result.song.album,
+                    'duration_ms': result.song.duration_ms,
                     'confidence_score': result.confidence_score,
-                    'spotify_id': result.spotify_id,
-                    'isrc': result.isrc,
-                    'external_ids': result.external_ids,
-                    'genres': result.genres,
-                    'release_date': result.release_date,
+                    'spotify_id': result.song.spotify_id,
+                    'isrc': result.song.isrc,
+                    'external_ids': result.song.external_ids,
+                    'genres': result.song.genres,
+                    'release_date': result.song.release_date,
                     'service': result.service,
                     'recognized_at': result.recognized_at.isoformat()
                 }
@@ -120,7 +126,10 @@ def export_to_json(results: Union[List[RecognitionResult], QuerySet], output_pat
         return True
         
     except Exception as e:
+        import traceback
         logger.error(f"Error exporting to JSON: {e}")
+        logger.error("Full stack trace:")
+        traceback.print_exc()
         return False
 
 
@@ -137,15 +146,15 @@ def export_to_dataframe(results: Union[List[RecognitionResult], QuerySet]) -> pd
             'video_duration': result.video.duration,
             'timestamp_start': result.timestamp_start,
             'timestamp_end': result.timestamp_end,
-            'title': result.title,
-            'artists': ', '.join(result.artists) if result.artists else '',
-            'album': result.album,
-            'duration_ms': result.duration_ms,
+            'title': result.song.title,
+            'artists': ', '.join([artist.name for artist in result.song.artist_set.all()]) if result.song.artist_set.exists() else '',
+            'album': result.song.album,
+            'duration_ms': result.song.duration_ms,
             'confidence_score': result.confidence_score,
-            'spotify_id': result.spotify_id,
-            'isrc': result.isrc,
-            'genres': ', '.join(result.genres) if result.genres else '',
-            'release_date': result.release_date,
+            'spotify_id': result.song.spotify_id,
+            'isrc': result.song.isrc,
+            'genres': ', '.join(result.song.genres) if result.song.genres else '',
+            'release_date': result.song.release_date,
             'service': result.service,
             'recognized_at': result.recognized_at
         })
@@ -160,14 +169,15 @@ def export_playlist_format(results: Union[List[RecognitionResult], QuerySet], ou
         unique_tracks = {}
         
         for result in results:
-            key = (result.title, tuple(result.artists))
+            artists = [artist.name for artist in result.song.artist_set.all()]
+            key = (result.song.title, tuple(artists))
             if key not in unique_tracks:
                 unique_tracks[key] = {
-                    'title': result.title,
-                    'artists': result.artists,
-                    'album': result.album,
-                    'spotify_id': result.spotify_id,
-                    'isrc': result.isrc,
+                    'title': result.song.title,
+                    'artists': artists,
+                    'album': result.song.album,
+                    'spotify_id': result.song.spotify_id,
+                    'isrc': result.song.isrc,
                     'occurrences': [],
                     'total_confidence': 0,
                     'count': 0
@@ -197,7 +207,10 @@ def export_playlist_format(results: Union[List[RecognitionResult], QuerySet], ou
         return True
         
     except Exception as e:
+        import traceback
         logger.error(f"Error exporting playlist format: {e}")
+        logger.error("Full stack trace:")
+        traceback.print_exc()
         return False
 
 
@@ -239,5 +252,8 @@ def export_statistics(results: Union[List[RecognitionResult], QuerySet], output_
         return True
         
     except Exception as e:
+        import traceback
         logger.error(f"Error exporting statistics: {e}")
+        logger.error("Full stack trace:")
+        traceback.print_exc()
         return False

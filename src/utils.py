@@ -96,8 +96,11 @@ def load_json_file(file_path: Path) -> Optional[Dict[str, Any]]:
         with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
+        import traceback
         logger = setup_logger(__name__)
         logger.error(f"Error loading JSON file {file_path}: {e}")
+        logger.error("Full stack trace:")
+        traceback.print_exc()
         return None
 
 
@@ -109,8 +112,11 @@ def save_json_file(data: Dict[str, Any], file_path: Path) -> bool:
             json.dump(data, f, indent=2, ensure_ascii=False)
         return True
     except Exception as e:
+        import traceback
         logger = setup_logger(__name__)
         logger.error(f"Error saving JSON file {file_path}: {e}")
+        logger.error("Full stack trace:")
+        traceback.print_exc()
         return False
 
 

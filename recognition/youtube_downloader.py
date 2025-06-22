@@ -108,7 +108,10 @@ class YouTubeDownloader:
             return video
             
         except Exception as e:
+            import traceback
             logger.error(f"Error downloading audio from {url}: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             return None
     
     def download_playlist(self, playlist_url: str) -> List[YouTubeVideo]:
@@ -135,7 +138,10 @@ class YouTubeDownloader:
                         videos.append(video)
                         
         except Exception as e:
+            import traceback
             logger.error(f"Error downloading playlist: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             
         return videos
     
@@ -169,6 +175,9 @@ class YouTubeDownloader:
                     Path(video.audio_file_path).unlink()
                     logger.info(f"Deleted old audio file: {video.audio_file_path}")
                 except Exception as e:
+                    import traceback
                     logger.error(f"Error deleting file: {e}")
+                    logger.error("Full stack trace:")
+                    traceback.print_exc()
                     
         logger.info(f"Cleaned up {old_videos.count()} old audio files")

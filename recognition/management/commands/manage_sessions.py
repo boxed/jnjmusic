@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.db.models import Count
+from django.utils import timezone
 from rich.console import Console
 from rich.table import Table
 
@@ -61,9 +62,7 @@ class Command(BaseCommand):
     
     def list_sessions(self):
         """List all recognition sessions."""
-        sessions = RecognitionSession.objects.annotate(
-            result_count=Count('recognitionresult')
-        ).order_by('-started_at')
+        sessions = RecognitionSession.objects.all().order_by('-started_at')
         
         if not sessions:
             console.print("[yellow]No sessions found[/yellow]")
@@ -119,9 +118,12 @@ class Command(BaseCommand):
             console.print(f"[red]Error: {session.error_message}[/red]")
         
         # Get results for this session
+        # Note: RecognitionResult is related to videos, not directly to sessions
+        # We need to find videos processed in this session time range
         results = RecognitionResult.objects.filter(
-            video__recognitionsession=session
-        ).select_related('video').order_by('video', 'timestamp_start')
+            recognized_at__gte=session.started_at,
+            recognized_at__lte=session.completed_at if session.completed_at else timezone.now()
+        ).select_related('video', 'song').prefetch_related('song__artist_set').order_by('video', 'timestamp_start')
         
         if results:
             console.print(f"\n[bold]Recognition Results:[/bold]")
@@ -132,10 +134,11 @@ class Command(BaseCommand):
                     current_video = result.video
                     console.print(f"\n[cyan]{current_video.title}[/cyan]")
                 
+                artists = ', '.join([artist.name for artist in result.song.artist_set.all()]) if result.song.artist_set.exists() else 'Unknown Artist'
                 console.print(
                     f"  [{result.timestamp_start:.1f}s] "
-                    f"[green]{result.title}[/green] by "
-                    f"[blue]{result.artists_display}[/blue]"
+                    f"[green]{result.song.title}[/green] by "
+                    f"[blue]{artists}[/blue]"
                 )
     
     def export_session(self, session_id, format):
@@ -147,8 +150,9 @@ class Command(BaseCommand):
             return
         
         results = RecognitionResult.objects.filter(
-            video__recognitionsession=session
-        ).select_related('video')
+            recognized_at__gte=session.started_at,
+            recognized_at__lte=session.completed_at if session.completed_at else timezone.now()
+        ).select_related('video', 'song').prefetch_related('song__artist_set')
         
         if not results:
             console.print("[yellow]No results to export[/yellow]")
@@ -174,7 +178,8 @@ class Command(BaseCommand):
         
         # Confirm deletion
         result_count = RecognitionResult.objects.filter(
-            video__recognitionsession=session
+            recognized_at__gte=session.started_at,
+            recognized_at__lte=session.completed_at if session.completed_at else timezone.now()
         ).count()
         
         console.print(f"[yellow]This will delete session #{session_id} and {result_count} results.[/yellow]")

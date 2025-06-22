@@ -165,3 +165,9 @@ AUTO_DISCOVERY_INTERVAL = 3600  # Seconds between checks in continuous mode
 
 # Download settings
 DOWNLOAD_DIR = DOWNLOADS_DIR
+
+
+try:
+    from .settings_local import *
+except ImportError:
+    pass

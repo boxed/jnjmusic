@@ -34,7 +34,7 @@ class YouTubeSearcher:
             "WSDC", "Championship", "Invitational", "Strictly Swing"
         ]
         
-        self.year_range = 3  # Look for videos from last 3 years
+        self.year_range = 5  # Look for videos from last 5 years by default
         
     def _get_ydl_search_opts(self) -> dict:
         """Get yt-dlp options for searching."""
@@ -71,10 +71,19 @@ class YouTubeSearcher:
                                 'view_count': entry.get('view_count', 0),
                             })
                             
-            logger.info(f"Found {len(videos)} relevant videos for query: {query}")
+            # Count new videos (not in database)
+            new_videos_count = 0
+            for video in videos:
+                if not YouTubeVideo.objects.filter(video_id=video['video_id']).exists():
+                    new_videos_count += 1
+            
+            logger.info(f"Found {len(videos)} relevant videos for query: {query} ({new_videos_count} new)")
             
         except Exception as e:
+            import traceback
             logger.error(f"Error searching YouTube: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             
         return videos
     
@@ -102,28 +111,31 @@ class YouTubeSearcher:
             
         return True
     
-    def discover_new_videos(self, days_back: int = 30) -> List[str]:
-        """Discover new J&J WCS videos from the last N days."""
+    def discover_new_videos(self, days_back: int = 30, year_range: Optional[int] = None) -> List[str]:
+        """Discover new J&J WCS videos from the last N days and Y years."""
         all_videos = []
         discovered_urls = []
+        
+        # Use provided year_range or default
+        years_to_search = year_range or self.year_range
         
         # Add time-based queries
         current_year = datetime.now().year
         time_queries = []
         
-        for query in self.search_queries:
-            # Search with current year
-            time_queries.append(f"{query} {current_year}")
+        # Search across multiple years
+        for year_offset in range(years_to_search):
+            search_year = current_year - year_offset
             
-            # Search with recent months
-            if days_back <= 90:
-                time_queries.append(f"{query} this month")
-                time_queries.append(f"{query} last month")
-        
-        # Add event-specific searches
-        for event in self.event_keywords:
-            time_queries.append(f"{event} J&J finals {current_year}")
-            time_queries.append(f"{event} Jack Jill {current_year}")
+            for query in self.search_queries:
+                # Search with specific year
+                time_queries.append(f"{query} {search_year}")
+                
+            
+            # Add event-specific searches for each year
+            for event in self.event_keywords:
+                time_queries.append(f"{event} J&J finals {search_year}")
+                time_queries.append(f"{event} Jack Jill {search_year}")
         
         # Search for each query
         for query in time_queries:
@@ -150,8 +162,12 @@ class YouTubeSearcher:
                             if upload_date >= cutoff_date:
                                 unique_videos.append(video)
                                 discovered_urls.append(video['url'])
-                        except:
+                        except Exception as e:
+                            import traceback
                             # If date parsing fails, include it anyway
+                            logger.error(f"Error parsing date: {e}")
+                            logger.error("Full stack trace:")
+                            traceback.print_exc()
                             unique_videos.append(video)
                             discovered_urls.append(video['url'])
                     else:
@@ -180,7 +196,10 @@ class YouTubeSearcher:
                                 urls.append(f"https://www.youtube.com/watch?v={video_id}")
                                 
         except Exception as e:
+            import traceback
             logger.error(f"Error searching channel: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             
         return urls
     

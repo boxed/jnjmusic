@@ -16,7 +16,15 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from iommi import Table
+
+from recognition.models import (
+    Song,
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', Table(
+        auto__model=Song,
+    ).as_view()),
 ]

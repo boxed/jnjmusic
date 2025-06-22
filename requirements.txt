@@ -3,6 +3,7 @@ yt-dlp
 pydub
 requests
 python-dotenv
+shazamio==0.7.0
 
 # Audio processing
 numpy

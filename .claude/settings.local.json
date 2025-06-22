@@ -7,7 +7,15 @@
       "Bash(touch:*)",
       "Bash(python manage.py:*)",
       "Bash(pip install:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(find:*)",
+      "Bash(python test:*)",
+      "Bash(grep:*)",
+      "Bash(flake8:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(true)",
+      "Bash(python:*)",
+      "Bash(lsof:*)"
     ],
     "deny": []
   }

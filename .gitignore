@@ -60,3 +60,6 @@ site/
 *.tmp
 *.bak
 *.log
+
+settings_local.py
+.cache

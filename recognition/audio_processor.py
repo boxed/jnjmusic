@@ -33,7 +33,10 @@ class AudioProcessor:
             return audio
             
         except Exception as e:
+            import traceback
             logger.error(f"Error loading audio file: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             return None
     
     def split_audio(self, audio: AudioSegment, video: YouTubeVideo) -> List[AudioSegmentModel]:
@@ -87,7 +90,10 @@ class AudioProcessor:
             return segments
             
         except Exception as e:
+            import traceback
             logger.error(f"Error splitting audio: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             return []
     
     def process_video(self, video: YouTubeVideo) -> List[AudioSegmentModel]:
@@ -127,7 +133,10 @@ class AudioProcessor:
             return output_path
             
         except Exception as e:
+            import traceback
             logger.error(f"Error converting audio format: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             return None
     
     def extract_audio_features(self, audio_path: Path) -> Optional[dict]:
@@ -150,7 +159,10 @@ class AudioProcessor:
             return features
             
         except Exception as e:
+            import traceback
             logger.error(f"Error extracting audio features: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             return None
     
     def cleanup_segments(self, video: YouTubeVideo):
@@ -163,7 +175,10 @@ class AudioProcessor:
                     Path(segment.file_path).unlink()
                     logger.info(f"Deleted segment file: {segment.file_path}")
                 except Exception as e:
+                    import traceback
                     logger.error(f"Error deleting segment file: {e}")
+                    logger.error("Full stack trace:")
+                    traceback.print_exc()
                     
         segments.delete()
         logger.info(f"Cleaned up segments for video: {video.title}")
@@ -196,5 +211,8 @@ class AudioProcessor:
             return output_path
             
         except Exception as e:
+            import traceback
             logger.error(f"Error merging segments: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             return None

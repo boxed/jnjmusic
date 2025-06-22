@@ -1,5 +1,5 @@
 import spotipy
-from spotipy.oauth2 import SpotifyOAuth
+from spotipy.oauth2 import SpotifyClientCredentials
 from django.conf import settings
 from typing import List, Dict, Optional
 import time
@@ -16,24 +16,19 @@ class SpotifyIntegration:
     def __init__(self):
         self.client_id = settings.SPOTIFY_CLIENT_ID
         self.client_secret = settings.SPOTIFY_CLIENT_SECRET
-        self.redirect_uri = settings.SPOTIFY_REDIRECT_URI
         
         if not all([self.client_id, self.client_secret]):
             raise ValueError("Spotify credentials not configured. Please set environment variables.")
         
-        self.scope = "playlist-modify-public playlist-modify-private user-library-read"
         self._sp = None
     
     @property
     def sp(self):
         """Lazy load Spotify client."""
         if not self._sp:
-            auth_manager = SpotifyOAuth(
+            auth_manager = SpotifyClientCredentials(
                 client_id=self.client_id,
-                client_secret=self.client_secret,
-                redirect_uri=self.redirect_uri,
-                scope=self.scope,
-                cache_path=settings.DATA_DIR / '.spotify_cache'
+                client_secret=self.client_secret
             )
             self._sp = spotipy.Spotify(auth_manager=auth_manager)
         return self._sp
@@ -67,80 +62,73 @@ class SpotifyIntegration:
             return None
             
         except Exception as e:
+            import traceback
             logger.error(f"Error searching track '{title}': {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             return None
     
     def enrich_recognition_result(self, result: RecognitionResult) -> bool:
         """Enrich a recognition result with Spotify metadata."""
         try:
             # Skip if already has Spotify ID
-            if result.spotify_id:
+            if result.song.spotify_id:
                 return True
             
+            # Get artist names
+            artists = [artist.name for artist in result.song.artist_set.all()]
+            
             # Search for track
-            track = self.search_track(result.title, result.artists)
+            track = self.search_track(result.song.title, artists)
             
             if track:
-                # Update result with Spotify data
-                result.spotify_id = track['id']
+                # Update song with Spotify data
+                result.song.spotify_id = track['id']
                 
                 # Add additional metadata
                 if 'album' in track and track['album']:
-                    result.album = track['album']['name']
+                    result.song.album = track['album']['name']
                     if 'release_date' in track['album']:
-                        result.release_date = track['album']['release_date']
+                        result.song.release_date = track['album']['release_date']
                 
                 # Extract ISRC if available
                 if 'external_ids' in track and 'isrc' in track['external_ids']:
-                    result.isrc = track['external_ids']['isrc']
+                    result.song.isrc = track['external_ids']['isrc']
                 
-                result.save()
-                logger.info(f"Enriched '{result.title}' with Spotify ID: {track['id']}")
+                result.song.save()
+                logger.info(f"Enriched '{result.song.title}' with Spotify ID: {track['id']}")
                 return True
             
             return False
             
         except Exception as e:
+            import traceback
             logger.error(f"Error enriching result: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             return False
     
     def create_playlist(self, name: str, description: str = "", public: bool = True) -> Optional[str]:
-        """Create a new Spotify playlist."""
-        try:
-            user = self.sp.current_user()
-            playlist = self.sp.user_playlist_create(
-                user['id'],
-                name,
-                public=public,
-                description=description
-            )
-            
-            logger.info(f"Created playlist: {name} (ID: {playlist['id']})")
-            return playlist['id']
-            
-        except Exception as e:
-            logger.error(f"Error creating playlist: {e}")
-            return None
+        """Create a new Spotify playlist.
+        
+        Note: Playlist creation requires user authentication, which is not supported
+        with Client Credentials flow. This method is preserved for future implementation
+        with proper user OAuth flow.
+        """
+        logger.warning("Playlist creation requires user authentication. " 
+                      "Please implement user OAuth flow for this functionality.")
+        return None
     
     def add_tracks_to_playlist(self, playlist_id: str, track_ids: List[str]) -> bool:
-        """Add tracks to a playlist."""
-        try:
-            # Spotify API limits to 100 tracks per request
-            for i in range(0, len(track_ids), 100):
-                batch = track_ids[i:i+100]
-                track_uris = [f"spotify:track:{tid}" for tid in batch]
-                self.sp.playlist_add_items(playlist_id, track_uris)
-                
-                # Rate limiting
-                if i + 100 < len(track_ids):
-                    time.sleep(0.5)
-            
-            logger.info(f"Added {len(track_ids)} tracks to playlist")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error adding tracks to playlist: {e}")
-            return False
+        """Add tracks to a playlist.
+        
+        Note: Adding tracks to playlists requires user authentication, which is not supported
+        with Client Credentials flow. This method is preserved for future implementation
+        with proper user OAuth flow.
+        """
+        logger.warning("Adding tracks to playlist requires user authentication. "
+                      "Please implement user OAuth flow for this functionality.")
+        return False
     
     def create_playlist_from_results(
         self, 
@@ -196,7 +184,10 @@ class SpotifyIntegration:
             return None
             
         except Exception as e:
+            import traceback
             logger.error(f"Error creating playlist from results: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             return None
     
     def get_track_metadata(self, track_id: str) -> Optional[Dict]:
@@ -216,38 +207,9 @@ class SpotifyIntegration:
             }
             
         except Exception as e:
+            import traceback
             logger.error(f"Error getting track metadata: {e}")
+            logger.error("Full stack trace:")
+            traceback.print_exc()
             return None
     
-    def authenticate_url(self) -> str:
-        """Get the URL for Spotify authentication."""
-        auth_manager = SpotifyOAuth(
-            client_id=self.client_id,
-            client_secret=self.client_secret,
-            redirect_uri=self.redirect_uri,
-            scope=self.scope,
-            cache_path=settings.DATA_DIR / '.spotify_cache'
-        )
-        return auth_manager.get_authorize_url()
-    
-    def handle_callback(self, code: str) -> bool:
-        """Handle the OAuth callback."""
-        try:
-            auth_manager = SpotifyOAuth(
-                client_id=self.client_id,
-                client_secret=self.client_secret,
-                redirect_uri=self.redirect_uri,
-                scope=self.scope,
-                cache_path=settings.DATA_DIR / '.spotify_cache'
-            )
-            
-            token_info = auth_manager.get_access_token(code)
-            if token_info:
-                logger.info("Successfully authenticated with Spotify")
-                return True
-                
-            return False
-            
-        except Exception as e:
-            logger.error(f"Error handling Spotify callback: {e}")
-            return False
