@@ -16,7 +16,8 @@
       "Bash(true)",
       "Bash(python:*)",
       "Bash(lsof:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "WebFetch(domain:www.worldsdc.com)"
     ],
     "deny": []
   }
