@@ -21,6 +21,18 @@ class Artist(models.Model):
         return self.name
 
 
+class Dancer(models.Model):
+    """Represents a dancer who appears in videos."""
+    name = models.CharField(max_length=200, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.name
+
+
 class YouTubeVideo(models.Model):
     """Represents a YouTube video that has been processed."""
     video_id = models.CharField(max_length=20, unique=True, db_index=True)
@@ -34,6 +46,7 @@ class YouTubeVideo(models.Model):
     audio_file_hash = models.CharField(max_length=64, blank=True, db_index=True)
     processed = models.BooleanField(default=False)
     error = models.TextField(blank=True)
+    dancers = models.ManyToManyField('Dancer', related_name='videos', blank=True)
 
     class Meta:
         ordering = ['-downloaded_at']

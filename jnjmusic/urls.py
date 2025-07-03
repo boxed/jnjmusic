@@ -26,5 +26,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', Table(
         auto__model=Song,
+        auto__exclude=['external_ids', 'genres'],
     ).as_view()),
 ]
