@@ -121,6 +121,7 @@ class YouTubeSearcher:
             "Spooky Westie Weekend",
             "Simply Adelaide West Coast Swing",
             "Tampa Bay",
+            "Seattle Swing Dance Club",
         ]
 
         self.year_range = 5  # Look for videos from last 5 years by default

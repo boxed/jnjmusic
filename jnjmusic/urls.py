@@ -20,6 +20,18 @@ from iommi import Table
 
 from recognition.models import (
     Song,
+    Dancer,
+    YouTubeVideo,
+)
+
+dancer_videos = Table(
+    auto__model=YouTubeVideo,
+    rows=lambda table, **_: Dancer.objects.get(pk=table.get_request().resolver_match.kwargs['pk']).videos.all(),
+    title=lambda table, **_: f'Videos featuring {Dancer.objects.get(pk=table.get_request().resolver_match.kwargs["pk"]).name}',
+    columns__title__cell__url=lambda row, **_: row.url,
+    columns__duration__cell__format=lambda value, **_: f'{value // 60}:{value % 60:02d}' if value else '',
+    columns__dancers__include=False,
+    auto__exclude=['audio_file_path', 'audio_file_hash', 'error', 'processed'],
 )
 
 urlpatterns = [
@@ -28,4 +40,12 @@ urlpatterns = [
         auto__model=Song,
         auto__exclude=['external_ids', 'genres'],
     ).as_view()),
+    path('dancers/', Table(
+        auto__model=Dancer,
+        title='Dancers',
+        columns__name__cell__url=lambda row, **_: f'/dancers/{row.pk}/',
+        columns__videos__cell__value=lambda row, **_: row.videos.count(),
+        columns__videos__display_name='Video Count',
+    ).as_view()),
+    path('dancers/<int:pk>/', dancer_videos.as_view()),
 ]
