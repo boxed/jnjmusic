@@ -15,7 +15,8 @@
       "Bash(python -m py_compile:*)",
       "Bash(true)",
       "Bash(python:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }
