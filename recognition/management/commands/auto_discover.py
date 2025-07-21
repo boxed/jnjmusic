@@ -5,7 +5,8 @@ from django.utils import timezone
 from pathlib import Path
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.live import Live
 import time
 
 from recognition.youtube_search import YouTubeSearcher
@@ -76,9 +77,6 @@ class Command(BaseCommand):
         )
     
     def handle(self, *args, **options):
-        console.print("[bold blue]J&J WCS Auto Discovery System[/bold blue]")
-        console.print(f"Searching for videos from the last {options['days_back']} days and {options['years']} years\n")
-        
         if options['continuous']:
             self.run_continuous(options)
         else:
@@ -91,8 +89,6 @@ class Command(BaseCommand):
             discovered_urls = self.discover_videos(options)
             
             if not discovered_urls:
-                console.print("[bold yellow]No NEW videos found to process[/bold yellow]")
-                console.print("[dim]All recent videos have already been discovered[/dim]")
                 return
                 
             if options['dry_run']:
@@ -142,50 +138,71 @@ class Command(BaseCommand):
         searcher = YouTubeSearcher()
         discovered_urls = []
         
-        console.print("[cyan]Searching for new J&J WCS videos...[/cyan]")
+        # Track totals
+        total_found = 0
+        total_new = 0
         
-        # Search with queries
-        urls = searcher.discover_new_videos(days_back=options['days_back'], year_range=options['years'])
-        query_new_count = len(urls)
-        discovered_urls.extend(urls)
-        console.print(f"[green]Found {query_new_count} NEW videos from search queries[/green]")
-        
-        # Search channels if requested
-        channel_new_count = 0
-        if options['channels']:
-            console.print("\n[cyan]Searching popular WCS channels...[/cyan]")
-            channels = searcher.get_popular_wcs_channels()
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            transient=True,
+            console=console
+        ) as progress:
+            # Search with queries
+            search_task = progress.add_task("[cyan]Searching for J&J WCS videos...", total=None)
             
-            for channel in channels:
-                try:
-                    channel_urls = searcher.search_by_channel(channel, max_results=20)
-                    if channel_urls:
-                        channel_new_count += len(channel_urls)
-                        console.print(f"  • {channel.split('/')[-1]}: {len(channel_urls)} NEW videos")
-                    discovered_urls.extend(channel_urls)
-                except Exception as e:
-                    import traceback
-                    logger.warning(f"Error searching channel {channel}: {e}")
-                    logger.warning("Full stack trace:")
-                    traceback.print_exc()
+            urls = searcher.discover_new_videos(days_back=options['days_back'], year_range=options['years'])
+            query_new_count = len(urls)
+            discovered_urls.extend(urls)
             
-            if channel_new_count > 0:
-                console.print(f"[green]Found {channel_new_count} NEW videos from channels[/green]")
+            # Update counter
+            progress.update(search_task, description=f"[cyan]Videos found: {query_new_count} (new: {query_new_count})")
+            total_found += query_new_count
+            total_new += query_new_count
+            
+            # Search channels if requested
+            if options['channels']:
+                channels = searcher.get_popular_wcs_channels()
+                channel_new_count = 0
+                
+                for channel in channels:
+                    try:
+                        channel_urls = searcher.search_by_channel(channel, max_results=20)
+                        if channel_urls:
+                            channel_new_count += len(channel_urls)
+                        discovered_urls.extend(channel_urls)
+                        
+                        # Update progress
+                        total_found += len(channel_urls) if channel_urls else 0
+                        total_new += len(channel_urls) if channel_urls else 0
+                        progress.update(search_task, description=f"[cyan]Videos found: {total_found} (new: {total_new})")
+                        
+                    except Exception as e:
+                        import traceback
+                        logger.warning(f"Error searching channel {channel}: {e}")
+                        logger.warning("Full stack trace:")
+                        traceback.print_exc()
+            
+            # Remove duplicates
+            original_count = len(discovered_urls)
+            discovered_urls = list(set(discovered_urls))
+            duplicate_count = original_count - len(discovered_urls)
+            
+            if duplicate_count > 0:
+                total_new = len(discovered_urls)
+                progress.update(search_task, description=f"[cyan]Videos found: {total_found} (new: {total_new}, {duplicate_count} duplicates removed)")
+            
+            # Limit to max videos
+            if len(discovered_urls) > options['max_videos']:
+                discovered_urls = discovered_urls[:options['max_videos']]
+                progress.update(search_task, description=f"[cyan]Videos found: {total_found} (new: {options['max_videos']}, limited)")
         
-        # Remove duplicates
-        original_count = len(discovered_urls)
-        discovered_urls = list(set(discovered_urls))
-        duplicate_count = original_count - len(discovered_urls)
-        
-        if duplicate_count > 0:
-            console.print(f"[yellow]Removed {duplicate_count} duplicate URLs[/yellow]")
-        
-        # Limit to max videos
-        if len(discovered_urls) > options['max_videos']:
-            console.print(f"[yellow]Limiting to {options['max_videos']} videos (from {len(discovered_urls)} found)[/yellow]")
-            discovered_urls = discovered_urls[:options['max_videos']]
-        
-        console.print(f"\n[bold green]Total: {len(discovered_urls)} NEW videos to process[/bold green]")
+        # Final summary
+        if discovered_urls:
+            console.print(f"[bold green]✓ Found {len(discovered_urls)} new videos to process[/bold green]")
+        else:
+            console.print("[bold yellow]No new videos found[/bold yellow]")
+            
         return discovered_urls
     
     def process_videos(self, urls: list, options):

@@ -59,7 +59,7 @@ class YouTubeSearcher:
             "Carolina Summer Swing",
             "Mediterranean Open WCS",
             "St. Petersburg WCS Nights",
-            "Midwest Westie Fest 2025",
+            "Midwest Westie Fest",
             "Toronto Open",
             "Rock the Barn",
             "Revitalise WCS",
@@ -87,7 +87,7 @@ class YouTubeSearcher:
             "Jax Westie Fest",
             "South Bay Dance Fling",
             "Trilogy Swing",
-            "Korea Westival 2025",
+            "Korea Westival",
             "Sea Dance Fest",
             "Bavarian Open West Coast Swing Championships",
             "Best of the Best WCS",
@@ -98,10 +98,10 @@ class YouTubeSearcher:
             "Austin Rocks",
             "Meet Me in St. Louis Swing Dance Championships",
             "Midland Swing Open",
-            "Mooseland Swing 2025",
+            "Mooseland Swing",
             "Norwegian Open WCS",
             "The Aloha Open",
-            "Milan Modern Swing 2025",
+            "Milan Modern Swing",
             "Paradise dance festival",
             "Go West SwingFest",
             "The New Zealand West Coast Swing Open",
@@ -122,6 +122,8 @@ class YouTubeSearcher:
             "Simply Adelaide West Coast Swing",
             "Tampa Bay",
             "Seattle Swing Dance Club",
+            'UK WCS Champs',
+            'midnight madness',
         ]
 
         self.year_range = 5  # Look for videos from last 5 years by default
@@ -167,7 +169,7 @@ class YouTubeSearcher:
                 if not YouTubeVideo.objects.filter(video_id=video['video_id']).exists():
                     new_videos_count += 1
 
-            logger.info(f"Found {len(videos)} relevant videos for query: {query} ({new_videos_count} new)")
+            logger.debug(f"Found {len(videos)} relevant videos for query: {query} ({new_videos_count} new)")
 
         except Exception as e:
             import traceback
@@ -264,7 +266,7 @@ class YouTubeSearcher:
                         unique_videos.append(video)
                         discovered_urls.append(video['url'])
 
-        logger.info(f"Discovered {len(discovered_urls)} new videos to process")
+        logger.debug(f"Discovered {len(discovered_urls)} new videos to process")
         return discovered_urls
 
     def search_by_channel(self, channel_url: str, max_results: int = 50) -> List[str]:
