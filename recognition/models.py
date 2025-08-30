@@ -1,6 +1,5 @@
 from django.db import models
 from django.utils import timezone
-import json
 
 
 class Artist(models.Model):
@@ -25,10 +24,10 @@ class Dancer(models.Model):
     """Represents a dancer who appears in videos."""
     name = models.CharField(max_length=200, unique=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         ordering = ['name']
-    
+
     def __str__(self):
         return self.name
 
@@ -56,6 +55,47 @@ class YouTubeVideo(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.video_id})"
+
+
+class Event(models.Model):
+    """Represents a recurring event series (e.g., 'French Open', 'World Championships')."""
+    name = models.CharField(max_length=200, unique=True)
+    description = models.TextField(blank=True)
+    event_type = models.CharField(max_length=100, blank=True)  # e.g., 'Competition', 'Festival', 'Show'
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Edition(models.Model):
+    """Represents a specific instance of an event (e.g., 'French Open 2025')."""
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='editions')
+    year = models.IntegerField(null=True, blank=True)
+    name = models.CharField(max_length=200, blank=True)  # Optional override, e.g., "50th Anniversary Edition"
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    location = models.CharField(max_length=300, blank=True)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-year', '-start_date']
+        unique_together = [['event', 'year']]
+
+    def __str__(self):
+        if self.name:
+            return self.name
+        elif self.year:
+            return f"{self.event.name} {self.year}"
+        elif self.start_date:
+            return f"{self.event.name} ({self.start_date.year})"
+        return str(self.event)
 
 
 class Song(models.Model):
@@ -86,6 +126,7 @@ class RecognitionResult(models.Model):
     """Stores music recognition results."""
     video = models.ForeignKey(YouTubeVideo, on_delete=models.CASCADE, related_name='recognition_results')
     song = models.ForeignKey(Song, on_delete=models.CASCADE, related_name='recognition_results')
+    edition = models.ForeignKey(Edition, on_delete=models.SET_NULL, null=True, blank=True, related_name='recognition_results')
     timestamp_start = models.FloatField(help_text="Start time in seconds")
     timestamp_end = models.FloatField(help_text="End time in seconds")
 

@@ -1,12 +1,12 @@
 import re
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timedelta
 import yt_dlp
 from django.utils import timezone
 from django.conf import settings
 
 from src.utils import setup_logger
-from .models import YouTubeVideo
+from .models import YouTubeVideo, Event, Edition
 
 logger = setup_logger(__name__)
 
@@ -124,6 +124,8 @@ class YouTubeSearcher:
             "Seattle Swing Dance Club",
             'UK WCS Champs',
             'midnight madness',
+            'DCSX',
+            'AWCSO',
         ]
 
         self.year_range = 5  # Look for videos from last 5 years by default
@@ -308,3 +310,60 @@ class YouTubeSearcher:
             "https://www.youtube.com/c/SummerHummer",
             "https://www.youtube.com/c/AllStarChampionships",
         ]
+    
+    def detect_event_and_edition(self, title: str, description: str = "", video_date: Optional[datetime] = None) -> Optional[Tuple[Event, Edition]]:
+        """
+        Detect event and edition from video title and description.
+        Returns tuple of (Event, Edition) or None if not detected.
+        """
+        text = f"{title} {description}".lower()
+        
+        # Try to find event name
+        detected_event_name = None
+        for event_keyword in self.event_keywords:
+            if event_keyword.lower() in text:
+                detected_event_name = event_keyword
+                break
+        
+        if not detected_event_name:
+            return None
+        
+        # Get or create the Event
+        event, _ = Event.objects.get_or_create(
+            name=detected_event_name,
+            defaults={
+                'event_type': 'Competition'
+            }
+        )
+        
+        # Try to extract year from title/description
+        year = None
+        year_pattern = r'\b((19|20)\d{2})\b'
+        year_matches = re.findall(year_pattern, title + " " + description)
+        
+        if year_matches:
+            # Get the first valid year found
+            for match in year_matches:
+                potential_year = int(match[0])
+                if 1990 <= potential_year <= datetime.now().year + 1:
+                    year = potential_year
+                    break
+        
+        # If no year found in text but we have video date, use that
+        if not year and video_date:
+            year = video_date.year
+        
+        # If still no year, try to infer from current date
+        if not year:
+            year = datetime.now().year
+        
+        # Get or create the Edition
+        edition, _ = Edition.objects.get_or_create(
+            event=event,
+            year=year,
+            defaults={
+                'name': f"{event.name} {year}" if year else event.name
+            }
+        )
+        
+        return event, edition

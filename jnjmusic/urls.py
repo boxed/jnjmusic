@@ -15,8 +15,14 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from django.template import Template
 from django.urls import path
-from iommi import Table
+from django.utils.html import format_html
+from iommi import (
+    Fragment,
+    Page,
+    Table,
+)
 
 from recognition.models import (
     Song,
@@ -36,9 +42,23 @@ dancer_videos = Table(
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', Table(
+    path('', Page(parts__index=Fragment(template=Template('''
+        <a href="events/">Events</a><br>
+        <a href="songs/">Songs</a><br>
+        <a href="dancers/">Dancers</a><br>
+    '''))).as_view()),
+    # path('events/', Table(
+    #     auto__model=Event,
+    # ).as_view()),
+    path('songs/', Table(
         auto__model=Song,
         auto__exclude=['external_ids', 'genres'],
+    ).as_view()),
+    path('songs/spotify_playlist/', Table(
+        auto__model=Song,
+        auto__include=['spotify_id'],
+        header__template=None,
+        columns__spotify_id__cell__format=lambda value, **_: format_html('https://open.spotify.com/track/{}', value),
     ).as_view()),
     path('dancers/', Table(
         auto__model=Dancer,

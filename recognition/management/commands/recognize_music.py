@@ -12,6 +12,7 @@ from recognition.models import YouTubeVideo, RecognitionResult, RecognitionSessi
 from recognition.youtube_downloader import YouTubeDownloader
 from recognition.audio_processor import AudioProcessor
 from recognition.optimized_audio_processor import OptimizedAudioProcessor
+from recognition.youtube_search import YouTubeSearcher
 
 console = Console()
 
@@ -129,6 +130,7 @@ class Command(BaseCommand):
             downloader = YouTubeDownloader()
             processor = AudioProcessor() if options.get('sequential') else OptimizedAudioProcessor()
             recognizer = get_recognizer(service)
+            searcher = YouTubeSearcher()
             
             # Override settings if provided
             if options['segment_length']:
@@ -168,6 +170,16 @@ class Command(BaseCommand):
                 for video in videos:
                     console.print(f"\n[bold]Processing: {video.title}[/bold]")
                     
+                    # Detect event and edition from video
+                    edition = None
+                    event_edition = searcher.detect_event_and_edition(
+                        video.title, 
+                        video.description if hasattr(video, 'description') else ""
+                    )
+                    if event_edition:
+                        event, edition = event_edition
+                        console.print(f"[green]Detected event: {event.name} - Edition: {edition}[/green]")
+                    
                     if not options.get('sequential'):
                         # Use optimized processing (default)
                         console.print("[cyan]Using optimized segment sampling strategy[/cyan]")
@@ -202,7 +214,8 @@ class Command(BaseCommand):
                                     'timestamp_end': segment.end_time,
                                     'confidence_score': result.get('score', 0),
                                     'service': service,
-                                    'raw_result': result.get('raw_result')
+                                    'raw_result': result.get('raw_result'),
+                                    'edition': edition
                                 }
                             )
                             
@@ -259,7 +272,8 @@ class Command(BaseCommand):
                                         'timestamp_end': segment.end_time,
                                         'confidence_score': result.get('score', 0),
                                         'service': service,
-                                        'raw_result': result.get('raw_result')
+                                        'raw_result': result.get('raw_result'),
+                                        'edition': edition
                                     }
                                 )
                                 
