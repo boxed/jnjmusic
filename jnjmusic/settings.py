@@ -149,7 +149,7 @@ ACRCLOUD_HOST = os.getenv('ACRCLOUD_HOST', 'identify-us-west-2.acrcloud.com')
 # Spotify settings
 SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
 SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
-SPOTIFY_REDIRECT_URI = os.getenv('SPOTIFY_REDIRECT_URI', 'http://localhost:8000/callback')
+SPOTIFY_REDIRECT_URI = os.getenv('SPOTIFY_REDIRECT_URI', 'http://localhost:8889/callback')
 
 # Audio processing settings
 AUDIO_SEGMENT_LENGTH = 30  # seconds

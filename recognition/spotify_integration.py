@@ -1,8 +1,9 @@
 import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
+from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 from django.conf import settings
 from typing import List, Dict, Optional
 import time
+import os
 
 from src.utils import setup_logger
 from .models import RecognitionResult, SpotifyPlaylist
@@ -13,9 +14,10 @@ logger = setup_logger(__name__)
 class SpotifyIntegration:
     """Handles Spotify API integration for playlist creation and metadata enrichment."""
     
-    def __init__(self):
-        self.client_id = settings.SPOTIFY_CLIENT_ID
-        self.client_secret = settings.SPOTIFY_CLIENT_SECRET
+    def __init__(self, use_user_auth=False):
+        self.client_id = os.getenv('SPOTIFY_CLIENT_ID', settings.SPOTIFY_CLIENT_ID)
+        self.client_secret = os.getenv('SPOTIFY_CLIENT_SECRET', settings.SPOTIFY_CLIENT_SECRET)
+        self.use_user_auth = use_user_auth
         
         if not all([self.client_id, self.client_secret]):
             raise ValueError("Spotify credentials not configured. Please set environment variables.")
@@ -26,10 +28,26 @@ class SpotifyIntegration:
     def sp(self):
         """Lazy load Spotify client."""
         if not self._sp:
-            auth_manager = SpotifyClientCredentials(
-                client_id=self.client_id,
-                client_secret=self.client_secret
-            )
+            if self.use_user_auth:
+                # User authentication for playlist management
+                redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI', 'http://localhost:8889/callback')
+                scope = 'playlist-modify-public playlist-modify-private playlist-read-private user-library-read'
+                
+                auth_manager = SpotifyOAuth(
+                    client_id=self.client_id,
+                    client_secret=self.client_secret,
+                    redirect_uri=redirect_uri,
+                    scope=scope,
+                    open_browser=True,
+                    cache_path='.spotify_cache'
+                )
+            else:
+                # Client credentials for read-only operations
+                auth_manager = SpotifyClientCredentials(
+                    client_id=self.client_id,
+                    client_secret=self.client_secret
+                )
+            
             self._sp = spotipy.Spotify(auth_manager=auth_manager)
         return self._sp
     
@@ -111,24 +129,56 @@ class SpotifyIntegration:
     def create_playlist(self, name: str, description: str = "", public: bool = True) -> Optional[str]:
         """Create a new Spotify playlist.
         
-        Note: Playlist creation requires user authentication, which is not supported
-        with Client Credentials flow. This method is preserved for future implementation
-        with proper user OAuth flow.
+        Requires user authentication (use_user_auth=True in constructor).
         """
-        logger.warning("Playlist creation requires user authentication. " 
-                      "Please implement user OAuth flow for this functionality.")
-        return None
+        if not self.use_user_auth:
+            logger.warning("Playlist creation requires user authentication. " 
+                          "Initialize SpotifyIntegration with use_user_auth=True.")
+            return None
+        
+        try:
+            user = self.sp.current_user()
+            playlist = self.sp.user_playlist_create(
+                user=user['id'],
+                name=name,
+                public=public,
+                description=description
+            )
+            logger.info(f"Created playlist '{name}' with ID: {playlist['id']}")
+            return playlist['id']
+        except Exception as e:
+            logger.error(f"Error creating playlist: {e}")
+            return None
     
     def add_tracks_to_playlist(self, playlist_id: str, track_ids: List[str]) -> bool:
         """Add tracks to a playlist.
         
-        Note: Adding tracks to playlists requires user authentication, which is not supported
-        with Client Credentials flow. This method is preserved for future implementation
-        with proper user OAuth flow.
+        Requires user authentication (use_user_auth=True in constructor).
         """
-        logger.warning("Adding tracks to playlist requires user authentication. "
-                      "Please implement user OAuth flow for this functionality.")
-        return False
+        if not self.use_user_auth:
+            logger.warning("Adding tracks to playlist requires user authentication. "
+                          "Initialize SpotifyIntegration with use_user_auth=True.")
+            return False
+        
+        try:
+            # Convert track IDs to URIs
+            track_uris = [f'spotify:track:{tid}' for tid in track_ids]
+            
+            # Spotify API limits to 100 tracks per request
+            for i in range(0, len(track_uris), 100):
+                batch = track_uris[i:i+100]
+                if i == 0:
+                    # First batch replaces existing tracks
+                    self.sp.playlist_replace_items(playlist_id, batch)
+                else:
+                    # Subsequent batches append
+                    self.sp.playlist_add_items(playlist_id, batch)
+            
+            logger.info(f"Added {len(track_ids)} tracks to playlist {playlist_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error adding tracks to playlist: {e}")
+            return False
     
     def create_playlist_from_results(
         self, 
@@ -212,4 +262,3 @@ class SpotifyIntegration:
             logger.error("Full stack trace:")
             traceback.print_exc()
             return None
-    

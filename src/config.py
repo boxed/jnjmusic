@@ -19,7 +19,7 @@ class Config:
     # Spotify settings
     SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-    SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI", "http://localhost:8888/callback")
+    SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI", "http://localhost:8889/callback")
     
     # Database
     DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR}/jnj_music.db")
