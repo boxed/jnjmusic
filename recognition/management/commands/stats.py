@@ -24,6 +24,10 @@ class Command(BaseCommand):
         videos_with_songs = RecognitionResult.objects.values('video').distinct().count()
         videos_without_songs = total_videos - videos_with_songs
         
+        # Songs with and without Spotify IDs
+        songs_with_spotify_id = Song.objects.exclude(spotify_id='').exclude(spotify_id__isnull=True).count()
+        songs_without_spotify_id = unique_songs - songs_with_spotify_id
+        
         # Create a nice table for display
         table = Table(title="Music Recognition Database Statistics", show_header=True, header_style="bold magenta")
         table.add_column("Metric", style="cyan", no_wrap=True)
@@ -33,6 +37,8 @@ class Command(BaseCommand):
         table.add_row("Unique Songs Detected", str(unique_songs))
         table.add_row("Total Songs Detected", str(total_songs_detected))
         table.add_row("Videos Without Detected Songs", str(videos_without_songs))
+        table.add_row("Songs With Spotify ID", str(songs_with_spotify_id))
+        table.add_row("Songs Without Spotify ID", str(songs_without_spotify_id))
         
         console.print(table)
         
@@ -48,6 +54,10 @@ class Command(BaseCommand):
             if total_songs_detected > 0 and videos_with_songs > 0:
                 avg_songs_per_video = total_songs_detected / videos_with_songs
                 console.print(f"• Average songs per video (with songs): {avg_songs_per_video:.1f}")
+            
+            if unique_songs > 0:
+                spotify_coverage = (songs_with_spotify_id / unique_songs) * 100
+                console.print(f"• Spotify ID coverage: {spotify_coverage:.1f}% of detected songs")
         
         # Segment efficiency statistics
         total_segments = AudioSegment.objects.count()
