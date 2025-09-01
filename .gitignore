@@ -63,3 +63,4 @@ site/
 
 settings_local.py
 .cache
+.spotify_cache
