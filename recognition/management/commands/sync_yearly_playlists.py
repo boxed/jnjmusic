@@ -1,13 +1,12 @@
-import re
-from collections import defaultdict
-from django.core.management.base import BaseCommand
-from django.db.models import Q
-from recognition.models import RecognitionResult, Song, YouTubeVideo
-from src.utils import setup_logger
-import spotipy
-from spotipy.oauth2 import SpotifyOAuth
 import os
+
+import spotipy
 from django.conf import settings
+from django.core.management.base import BaseCommand
+from spotipy.oauth2 import SpotifyOAuth
+
+from recognition.models import RecognitionResult
+from src.utils import setup_logger
 
 logger = setup_logger(__name__)
 
