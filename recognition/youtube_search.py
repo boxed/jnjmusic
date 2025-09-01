@@ -18,11 +18,29 @@ class YouTubeSearcher:
         self.search_queries = [
             "J&J WCS finals",
             "J&J WCS prelims",
+            "J&J WCS",
             "Jack and Jill WCS finals",
+            "Jack and Jill WCS prelims",
+            "Jack and Jill WCS",
             "Jack and Jill West Coast Swing finals",
+            "Jack and Jill West Coast Swing",
             "J&J West Coast Swing competition",
+            "J&J West Coast Swing",
             "WCS Jack Jill finals",
+            "WCS Jack Jill",
             "West Coast Swing J&J competition",
+            "West Coast Swing J&J",
+            "Strictly WCS finals",
+            "Strictly WCS prelims",
+            "Strictly WCS",
+            "Strictly West Coast Swing finals",
+            "Strictly West Coast Swing",
+            "WCS Strictly finals",
+            "WCS Strictly",
+            "West Coast Swing Strictly competition",
+            "West Coast Swing Strictly",
+            "Strictly Swing finals",
+            "Strictly Swing",
         ]
 
         self.event_keywords = [
@@ -190,8 +208,8 @@ class YouTubeSearcher:
         if duration < 180 or duration > 900:  # 3-15 minutes
             return False
 
-        # Check for J&J or Jack & Jill mentions
-        if not any(term in title for term in ['j&j', 'jack', 'jill', 'j & j']):
+        # Check for J&J or Jack & Jill or Strictly mentions
+        if not any(term in title for term in ['j&j', 'jack', 'jill', 'j & j', 'strictly']):
             return False
 
         # Check for WCS or West Coast Swing
@@ -230,6 +248,8 @@ class YouTubeSearcher:
             for event in self.event_keywords:
                 time_queries.append(f"{event} J&J finals {search_year}")
                 time_queries.append(f"{event} Jack Jill {search_year}")
+                time_queries.append(f"{event} Strictly finals {search_year}")
+                time_queries.append(f"{event} Strictly {search_year}")
 
         # Search for each query
         for query in time_queries:

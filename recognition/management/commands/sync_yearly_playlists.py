@@ -17,16 +17,10 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--years',
-            nargs='+',
-            type=int,
-            help='Specific years to include (e.g., --years 2023 2024)'
-        )
-        parser.add_argument(
             '--playlist-name',
             type=str,
-            default='WCS J&J Collection',
-            help='Name for the playlist (default: "WCS J&J Collection")'
+            default='WCS competition music',
+            help='Name for the playlist (default: "WCS competition music")'
         )
         parser.add_argument(
             '--dry-run',
@@ -50,20 +44,11 @@ class Command(BaseCommand):
             help='Show detailed information about skipped songs'
         )
 
-    def extract_year_from_title(self, title):
-        """Extract year from video title using regex."""
-        # Look for 4-digit years in the title
-        year_matches = re.findall(r'\b(19\d{2}|20\d{2})\b', title)
-        if year_matches:
-            # Return the most recent year found
-            return max(int(year) for year in year_matches)
-        return None
-
     def get_songs_by_year(self, verbose=False):
-        """Group songs by year based on video titles."""
+        """Get all songs with valid Spotify IDs."""
         import re
-        
-        songs_by_year = defaultdict(set)
+
+        all_songs = set()
         skipped_no_spotify = []
         skipped_invalid_spotify = []
         skipped_no_year = []
@@ -73,10 +58,10 @@ class Command(BaseCommand):
         all_results = RecognitionResult.objects.select_related(
             'song', 'video'
         ).prefetch_related('song__artist_set')
-        
+
         for result in all_results:
             total_results += 1
-            
+
             # Skip songs without Spotify IDs
             if not result.song.spotify_id or result.song.spotify_id.strip() == '':
                 artists = ', '.join([a.name for a in result.song.artist_set.all()]) or 'Unknown Artist'
@@ -88,7 +73,7 @@ class Command(BaseCommand):
                 if verbose:
                     logger.info(f"Skipped (no Spotify ID): '{result.song.title}' by {artists}")
                 continue
-            
+
             # Validate Spotify ID format (should be 22 alphanumeric characters)
             spotify_id = result.song.spotify_id.strip()
             if not re.match(r'^[a-zA-Z0-9]{22}$', spotify_id):
@@ -102,19 +87,8 @@ class Command(BaseCommand):
                 if verbose:
                     logger.info(f"Skipped (invalid Spotify ID): '{result.song.title}' by {artists} - ID: {spotify_id}")
                 continue
-            
-            # Extract year from video title
-            year = self.extract_year_from_title(result.video.title)
-            if not year:
-                skipped_no_year.append({
-                    'title': result.song.title,
-                    'video': result.video.title
-                })
-                if verbose:
-                    logger.info(f"Skipped (no year): '{result.song.title}' from video '{result.video.title}'")
-                continue
-            
-            songs_by_year[year].add(spotify_id)
+
+            all_songs.add(spotify_id)
 
         # Log statistics
         if len(skipped_no_spotify) > 0 or len(skipped_invalid_spotify) > 0 or len(skipped_no_year) > 0:
@@ -124,7 +98,7 @@ class Command(BaseCommand):
             logger.info(f"  - {len(skipped_no_year)} skipped (no year in title)")
             logger.info(f"  - {total_results - len(skipped_no_spotify) - len(skipped_invalid_spotify) - len(skipped_no_year)} included")
 
-        return songs_by_year, {
+        return list(all_songs), {
             'total': total_results,
             'skipped_no_spotify': skipped_no_spotify,
             'skipped_invalid_spotify': skipped_invalid_spotify,
@@ -211,18 +185,17 @@ class Command(BaseCommand):
                 sp.playlist_add_items(playlist_id, track_uris)
 
     def handle(self, *args, **options):
-        years_filter = options.get('years')
         playlist_name = options['playlist_name']
         dry_run = options['dry_run']
         force = options['force']
         public = options['public']
         verbose = options['verbose']
 
-        # Get songs grouped by year
+        # Get all songs
         self.stdout.write("Analyzing songs...")
-        songs_by_year, stats = self.get_songs_by_year(verbose=verbose)
+        all_track_ids, stats = self.get_songs_by_year(verbose=verbose)
 
-        if not songs_by_year:
+        if not all_track_ids:
             self.stdout.write(self.style.WARNING("No songs with valid Spotify IDs found"))
             if len(stats['skipped_no_spotify']) > 0:
                 self.stdout.write(f"  {len(stats['skipped_no_spotify'])} songs skipped (no Spotify ID)")
@@ -231,7 +204,7 @@ class Command(BaseCommand):
             if len(stats['skipped_no_year']) > 0:
                 self.stdout.write(f"  {len(stats['skipped_no_year'])} songs skipped (no year in title)")
             return
-        
+
         # Display filtering statistics
         if len(stats['skipped_no_spotify']) > 0 or len(stats['skipped_invalid_spotify']) > 0 or len(stats['skipped_no_year']) > 0:
             self.stdout.write(f"\nFiltering statistics:")
@@ -259,33 +232,8 @@ class Command(BaseCommand):
                         self.stdout.write(f"    ... and {len(stats['skipped_no_year']) - 10} more")
             self.stdout.write(f"  Included in playlist: {stats['total'] - len(stats['skipped_no_spotify']) - len(stats['skipped_invalid_spotify']) - len(stats['skipped_no_year'])}")
 
-        # Filter years if specified
-        if years_filter:
-            songs_by_year = {
-                year: songs for year, songs in songs_by_year.items()
-                if year in years_filter
-            }
-
-        # Sort years
-        sorted_years = sorted(songs_by_year.keys())
-        
-        # Combine all songs into a single set (removes duplicates across years)
-        all_track_ids = set()
-        for year in sorted_years:
-            all_track_ids.update(songs_by_year[year])
-        
-        # Convert to list for ordering
-        all_track_ids = list(all_track_ids)
-
         # Display summary
-        self.stdout.write(f"\nFound songs from {len(sorted_years)} years:")
-        total_songs_with_dupes = sum(len(songs) for songs in songs_by_year.values())
-        for year in sorted_years:
-            self.stdout.write(f"  {year}: {len(songs_by_year[year])} songs")
-        
-        self.stdout.write(f"\nTotal unique songs (duplicates removed): {len(all_track_ids)}")
-        if total_songs_with_dupes > len(all_track_ids):
-            self.stdout.write(f"  ({total_songs_with_dupes - len(all_track_ids)} duplicates removed)")
+        self.stdout.write(f"\nTotal unique songs: {len(all_track_ids)}")
 
         if dry_run:
             self.stdout.write(self.style.SUCCESS("\nDry run completed. No changes made."))
@@ -308,20 +256,19 @@ class Command(BaseCommand):
         # Create or update the single playlist
         self.stdout.write(f"\nCreating/updating playlist: {playlist_name}")
         self.stdout.write(f"Total songs to add: {len(all_track_ids)}")
-        
+
         try:
-            # Generate description with year range
-            year_range = f"{min(sorted_years)}-{max(sorted_years)}" if len(sorted_years) > 1 else str(sorted_years[0])
-            description = f"West Coast Swing Jack & Jill music collection ({year_range})"
-            
+            # Generate description
+            description = f"West Coast Swing competition music collection"
+
             # Get or create playlist
             playlist_id, created = self.get_or_create_playlist(
-                sp, 
+                sp,
                 playlist_name,
                 description,
                 public=public
             )
-            
+
             if created:
                 self.stdout.write(f"Created new playlist: {playlist_name}")
             else:
@@ -329,17 +276,17 @@ class Command(BaseCommand):
                     self.stdout.write(f"Updating existing playlist: {playlist_name}")
                 else:
                     self.stdout.write(f"Found existing playlist: {playlist_name}")
-            
+
             # Sync tracks
             self.sync_playlist(sp, playlist_id, all_track_ids, replace=True)
-            
+
             # Get playlist URL
             playlist_data = sp.playlist(playlist_id, fields='external_urls')
             playlist_url = playlist_data['external_urls']['spotify']
-            
+
             self.stdout.write(self.style.SUCCESS(f"\n✓ Successfully synced {len(all_track_ids)} songs to '{playlist_name}'"))
             self.stdout.write(f"Playlist URL: {playlist_url}")
-            
+
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"\n✗ Failed to sync playlist: {e}"))
             logger.error(f"Error syncing playlist: {e}", exc_info=True)
